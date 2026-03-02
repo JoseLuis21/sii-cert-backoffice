@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SII Cert Backoffice",
+  title: "SII Certificación",
   description: "Login de acceso para certificación",
 };
 

@@ -22,7 +22,7 @@ import {
 
 const menuItems = [
   {
-    title: "Dashboard",
+    title: "Inicio",
     href: "/dashboard",
     icon: LayoutDashboard,
   },
@@ -54,7 +54,7 @@ export function AppSidebar({
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">SII Cert</span>
-                  <span className="truncate text-xs">Backoffice</span>
+                  <span className="truncate text-xs">Administración</span>
                 </div>
               </Link>
             </SidebarMenuButton>

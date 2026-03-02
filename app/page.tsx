@@ -68,7 +68,7 @@ export default function Home() {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Ingreso Backoffice</CardTitle>
+          <CardTitle>Ingreso al sistema</CardTitle>
           <CardDescription>
             Inicia sesión con tu usuario y contraseña.
           </CardDescription>

@@ -6,6 +6,7 @@ import {
   CalendarIcon,
   Check,
   ChevronsUpDown,
+  Copy,
   Eye,
   EyeOff,
   Loader2,
@@ -279,6 +280,7 @@ export default function CertificationsPage() {
   const [isValidatingCertPassword, setIsValidatingCertPassword] = useState(false);
   const [showCertPassword, setShowCertPassword] = useState(false);
   const [isEnqueueingCertification, setIsEnqueueingCertification] = useState(false);
+  const [isCloningCertification, setIsCloningCertification] = useState(false);
   const [editingProcessingStatus, setEditingProcessingStatus] = useState<
     "pending" | "processing" | "finish"
   >("pending");
@@ -491,6 +493,11 @@ export default function CertificationsPage() {
       setMessage("No se puede actualizar una certificación en proceso");
       return;
     }
+    if (isEditing && editingProcessingStatus === "finish") {
+      setSaving(false);
+      setMessage("No se puede actualizar una certificación finalizada");
+      return;
+    }
 
     if (!form.actecoEmisor.trim()) {
       setSaving(false);
@@ -686,6 +693,42 @@ export default function CertificationsPage() {
     }
   }
 
+  async function onCloneCertification() {
+    if (!editingId) {
+      return;
+    }
+
+    setEnqueueStatus(null);
+    setIsCloningCertification(true);
+
+    try {
+      const response = await fetch(`/api/certifications/${editingId}/clone`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+        id?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        setEnqueueStatus({
+          status: "error",
+          message: payload.message ?? "No fue posible copiar la certificación",
+        });
+        return;
+      }
+
+      setEnqueueStatus({
+        status: "success",
+        message: payload.message ?? "Copia creada correctamente",
+      });
+      await loadCertifications();
+    } finally {
+      setIsCloningCertification(false);
+    }
+  }
+
   function renderStatusBadge(status: CertificationListItem["processingStatus"]) {
     const loadingStatus = status === "processing";
     const label =
@@ -734,7 +777,7 @@ export default function CertificationsPage() {
                 Certificaciones
               </h1>
               <p className="text-sm text-muted-foreground">
-                CRUD de la colección certifications.
+                Gestión de certificaciones.
               </p>
             </div>
           </div>
@@ -1275,6 +1318,24 @@ export default function CertificationsPage() {
                     <Button
                       type="button"
                       variant="outline"
+                      onClick={() => void onCloneCertification()}
+                      disabled={
+                        isCloningCertification ||
+                        saving ||
+                        isEnqueueingCertification ||
+                        editingProcessingStatus !== "finish"
+                      }
+                    >
+                      <Copy className="mr-2 size-4" />
+                      {isCloningCertification
+                        ? "Copiando..."
+                        : "Copiar certificación"}
+                    </Button>
+                  ) : null}
+                  {isEditing ? (
+                    <Button
+                      type="button"
+                      variant="outline"
                       className="border-emerald-600 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
                       onClick={() => void onEnqueueCertification()}
                       disabled={
@@ -1303,6 +1364,7 @@ export default function CertificationsPage() {
                     disabled={
                       saving ||
                       editingProcessingStatus === "processing" ||
+                      editingProcessingStatus === "finish" ||
                       (requiresCertValidation && !hasValidCertPassword)
                     }
                   >

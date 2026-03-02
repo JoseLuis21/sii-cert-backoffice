@@ -81,11 +81,14 @@ export async function PUT(request: Request, { params }: RouteParams) {
       );
     }
 
-    if (current.processingStatus === "processing") {
+    if (
+      current.processingStatus === "processing" ||
+      current.processingStatus === "finish"
+    ) {
       return NextResponse.json(
         {
           ok: false,
-          message: "No se puede actualizar una certificación en proceso",
+          message: "No se puede actualizar una certificación en proceso o finalizada",
         },
         { status: 409 }
       );

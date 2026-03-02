@@ -1,4 +1,4 @@
-import { ObjectId } from "mongodb";
+import { Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -21,28 +21,57 @@ import {
 } from "@/components/ui/table";
 import { getDb } from "@/lib/mongodb";
 
-type UserRow = {
-  _id: ObjectId;
-  email: string;
-  status?: string;
-  createdAt?: Date;
+type CertificationRow = {
+  _id: string;
+  rutEmisor?: string;
+  razonSocialEmisor?: string;
+  resolutionNumber?: string;
+  processingStatus?: "pending" | "processing" | "finish";
+  createdAt?: string;
 };
 
 export default async function DashboardPage() {
   const db = await getDb();
 
-  const [totalUsers, activeUsers, totalCertifications, recentUsers] =
-    await Promise.all([
-      db.collection("users").countDocuments(),
-      db.collection("users").countDocuments({ status: "active" }),
-      db.collection("certifications").countDocuments(),
-      db
-        .collection("users")
-        .find<UserRow>({}, { projection: { email: 1, status: 1, createdAt: 1 } })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .toArray(),
-    ]);
+  const [totalCertifications, latestCertifications] = await Promise.all([
+    db.collection("certifications").countDocuments(),
+    db
+      .collection("certifications")
+      .find<CertificationRow>(
+        {},
+        {
+          projection: {
+            rutEmisor: 1,
+            razonSocialEmisor: 1,
+            resolutionNumber: 1,
+            processingStatus: 1,
+            createdAt: 1,
+          },
+        }
+      )
+      .sort({ createdAt: -1 })
+      .limit(3)
+      .toArray(),
+  ]);
+
+  function renderStatusBadge(status?: CertificationRow["processingStatus"]) {
+    const normalized = status ?? "pending";
+    const label =
+      normalized === "pending"
+        ? "pendiente"
+        : normalized === "processing"
+          ? "en proceso"
+          : "finalizado";
+
+    return (
+      <Badge variant="outline" className="inline-flex items-center gap-1.5">
+        {normalized === "processing" ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : null}
+        {label}
+      </Badge>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/50 p-6 md:p-8">
@@ -51,9 +80,9 @@ export default async function DashboardPage() {
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-6" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Inicio</h1>
             <p className="text-sm text-muted-foreground">
-              Resumen de certificación y usuarios.
+              Resumen de certificaciones.
             </p>
           </div>
           <div className="ml-auto">
@@ -61,19 +90,7 @@ export default async function DashboardPage() {
           </div>
         </header>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Usuarios totales</CardDescription>
-              <CardTitle className="text-3xl">{totalUsers}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Usuarios activos</CardDescription>
-              <CardTitle className="text-3xl">{activeUsers}</CardTitle>
-            </CardHeader>
-          </Card>
+        <div className="grid gap-4 md:grid-cols-1">
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Certificaciones</CardDescription>
@@ -84,44 +101,47 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Últimos usuarios</CardTitle>
-            <CardDescription>Registro reciente en la plataforma</CardDescription>
+            <CardTitle>Últimas 3 certificaciones</CardTitle>
+            <CardDescription>Registro reciente con estado de proceso</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Emisor</TableHead>
+                  <TableHead>Resolución</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha creación</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentUsers.length === 0 ? (
+                {latestCertifications.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={4}
                       className="py-8 text-center text-muted-foreground"
                     >
-                      No hay usuarios registrados.
+                      No hay certificaciones registradas.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  recentUsers.map((user) => (
-                    <TableRow key={user._id.toString()}>
-                      <TableCell>{user.email}</TableCell>
+                  latestCertifications.map((certification) => (
+                    <TableRow key={certification._id.toString()}>
                       <TableCell>
-                        <Badge
-                          variant={
-                            user.status === "active" ? "default" : "secondary"
-                          }
-                        >
-                          {user.status ?? "unknown"}
-                        </Badge>
+                        <p className="font-medium">
+                          {certification.razonSocialEmisor || "-"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {certification.rutEmisor || "-"}
+                        </p>
+                      </TableCell>
+                      <TableCell>{certification.resolutionNumber || "-"}</TableCell>
+                      <TableCell>
+                        {renderStatusBadge(certification.processingStatus)}
                       </TableCell>
                       <TableCell>
-                        {user.createdAt
-                          ? new Date(user.createdAt).toLocaleString("es-CL")
+                        {certification.createdAt
+                          ? new Date(certification.createdAt).toLocaleString("es-CL")
                           : "-"}
                       </TableCell>
                     </TableRow>
@@ -131,7 +151,7 @@ export default async function DashboardPage() {
             </Table>
             <Separator className="my-4" />
             <p className="text-xs text-muted-foreground">
-              Fuente: MongoDB base <strong>certificacion</strong>.
+              Información obtenida desde la base de datos.
             </p>
           </CardContent>
         </Card>
