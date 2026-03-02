@@ -25,9 +25,18 @@ export async function POST(request: Request) {
     const certBuffer = Buffer.from(bytes);
     const binary = certBuffer.toString("binary");
 
+    let notAfter: Date | null = null;
+
     try {
       const asn1 = forge.asn1.fromDer(binary);
-      forge.pkcs12.pkcs12FromAsn1(asn1, password.trim());
+      const pkcs12 = forge.pkcs12.pkcs12FromAsn1(asn1, password.trim());
+      const certBags =
+        pkcs12.getBags({
+          bagType: forge.pki.oids.certBag,
+        })[forge.pki.oids.certBag] ?? [];
+
+      const firstCert = certBags[0]?.cert;
+      notAfter = firstCert?.validity?.notAfter ?? null;
     } catch {
       return NextResponse.json(
         { ok: false, message: "Contraseña de certificado inválida" },
@@ -35,9 +44,30 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!notAfter) {
+      return NextResponse.json(
+        { ok: false, message: "No se pudo leer la vigencia del certificado" },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date();
+    if (notAfter.getTime() < now.getTime()) {
+      const expiresAt = notAfter.toISOString().slice(0, 10);
+      return NextResponse.json(
+        {
+          ok: false,
+          message: `Certificado vencido (venció el ${expiresAt})`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const expiresAt = notAfter.toISOString().slice(0, 10);
+
     return NextResponse.json({
       ok: true,
-      message: "Contraseña de certificado válida",
+      message: `Contraseña válida. Certificado vigente hasta ${expiresAt}`,
     });
   } catch (error) {
     console.error("Validate certificate password error", error);

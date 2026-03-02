@@ -6,6 +6,8 @@ import {
   CalendarIcon,
   Check,
   ChevronsUpDown,
+  Eye,
+  EyeOff,
   Pencil,
   Plus,
   Trash2,
@@ -112,6 +114,7 @@ type ParsedXmlNumeration = {
   startNumber?: string;
   endNumber?: string;
   documentType?: string;
+  emitterRut?: string;
 };
 
 type ActecoOption = {
@@ -140,11 +143,13 @@ type FormState = {
   resolutionTicketDate: string;
 };
 
+const DEFAULT_ACTECO_CODE = "472101";
+
 const emptyForm: FormState = {
   rutEmisor: "",
   razonSocialEmisor: "",
   giroEmisor: "",
-  actecoEmisor: "",
+  actecoEmisor: DEFAULT_ACTECO_CODE,
   direccionEmisor: "",
   comunaEmisor: "",
   emailEmisor: "",
@@ -219,6 +224,10 @@ function extractTagValue(xml: string, tagName: string): string {
   return match?.[1]?.trim() ?? "";
 }
 
+function normalizeRut(value: string): string {
+  return value.replace(/[^0-9kK]/g, "").toUpperCase();
+}
+
 async function parseNumerationXml(file: File): Promise<ParsedXmlNumeration> {
   const text = await file.text();
   const parser = new DOMParser();
@@ -238,8 +247,11 @@ async function parseNumerationXml(file: File): Promise<ParsedXmlNumeration> {
   const endNumber =
     xmlDoc.getElementsByTagName("H")[0]?.textContent?.trim() ||
     extractTagValue(text, "H");
+  const emitterRut =
+    xmlDoc.getElementsByTagName("RE")[0]?.textContent?.trim() ||
+    extractTagValue(text, "RE");
 
-  return { documentType, startNumber, endNumber };
+  return { documentType, startNumber, endNumber, emitterRut };
 }
 
 export default function CertificationsPage() {
@@ -256,6 +268,7 @@ export default function CertificationsPage() {
   const [actecoOptions, setActecoOptions] = useState<ActecoOption[]>([]);
   const [actecoOpen, setActecoOpen] = useState(false);
   const [isValidatingCertPassword, setIsValidatingCertPassword] = useState(false);
+  const [showCertPassword, setShowCertPassword] = useState(false);
   const [certPasswordValidation, setCertPasswordValidation] = useState<{
     status: "success" | "error";
     message: string;
@@ -315,18 +328,49 @@ export default function CertificationsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isEditing || !form.actecoEmisor || form.giroEmisor) {
+      return;
+    }
+
+    const selected = actecoOptions.find(
+      (option) => option.code === form.actecoEmisor
+    );
+    if (!selected) {
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, giroEmisor: selected.label }));
+  }, [actecoOptions, form.actecoEmisor, form.giroEmisor, isEditing]);
+
   function resetForm() {
     setEditingId(null);
-    setForm(emptyForm);
+    const defaultActecoLabel =
+      actecoOptions.find((option) => option.code === DEFAULT_ACTECO_CODE)?.label ??
+      "";
+    setForm({
+      ...emptyForm,
+      giroEmisor: defaultActecoLabel,
+    });
     setSetSiiFile(null);
     setCertificadoFile(null);
     setNumerations([]);
     setMessage("");
     setCertPasswordValidation(null);
+    setShowCertPassword(false);
   }
 
   function updateField(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function applyActecoSelection(code: string) {
+    const selected = actecoOptions.find((option) => option.code === code);
+    setForm((prev) => ({
+      ...prev,
+      actecoEmisor: code,
+      giroEmisor: selected?.label ?? prev.giroEmisor,
+    }));
   }
 
   function addNumeration() {
@@ -405,6 +449,7 @@ export default function CertificationsPage() {
       );
       setDialogOpen(true);
       setMessage("");
+      setShowCertPassword(false);
     } finally {
       setSaving(false);
     }
@@ -683,7 +728,7 @@ export default function CertificationsPage() {
                                       key={option.code}
                                       value={`${option.code} ${option.label}`}
                                       onSelect={() => {
-                                        updateField("actecoEmisor", option.code);
+                                        applyActecoSelection(option.code);
                                         setActecoOpen(false);
                                       }}
                                     >
@@ -852,7 +897,7 @@ export default function CertificationsPage() {
                       Certificado y password
                     </CardTitle>
                     <CardDescription>
-                      Valida la contraseña antes de guardar.
+                      Valida contraseña y vigencia del certificado antes de guardar.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
@@ -876,16 +921,35 @@ export default function CertificationsPage() {
                       <Label htmlFor="claveCertificado">
                         Clave certificado
                       </Label>
-                      <Input
-                        id="claveCertificado"
-                        type="password"
-                        value={form.claveCertificado}
-                        onChange={(event) => {
-                          updateField("claveCertificado", event.target.value);
-                          setCertPasswordValidation(null);
-                        }}
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="claveCertificado"
+                          type={showCertPassword ? "text" : "password"}
+                          value={form.claveCertificado}
+                          onChange={(event) => {
+                            updateField("claveCertificado", event.target.value);
+                            setCertPasswordValidation(null);
+                          }}
+                          className="pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCertPassword((prev) => !prev)}
+                          aria-label={
+                            showCertPassword
+                              ? "Ocultar contraseña"
+                              : "Mostrar contraseña"
+                          }
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+                        >
+                          {showCertPassword ? (
+                            <EyeOff className="size-4" />
+                          ) : (
+                            <Eye className="size-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <Button
                       type="button"
@@ -895,7 +959,7 @@ export default function CertificationsPage() {
                     >
                       {isValidatingCertPassword
                         ? "Validando..."
-                        : "Validar password"}
+                        : "Validar password y vigencia"}
                     </Button>
                     {certPasswordValidation ? (
                       <p
@@ -997,8 +1061,25 @@ export default function CertificationsPage() {
                                   return;
                                 }
 
-                                updateNumeration(index, { file });
                                 const parsed = await parseNumerationXml(file);
+                                const normalizedEmitterRut = normalizeRut(form.rutEmisor);
+                                const normalizedFolioRut = normalizeRut(
+                                  parsed.emitterRut ?? ""
+                                );
+
+                                if (
+                                  !normalizedEmitterRut ||
+                                  !normalizedFolioRut ||
+                                  normalizedEmitterRut !== normalizedFolioRut
+                                ) {
+                                  updateNumeration(index, { file: null });
+                                  setMessage(
+                                    "El RUT del folio seleccionado no coincide con el RUT del emisor"
+                                  );
+                                  return;
+                                }
+
+                                updateNumeration(index, { file });
                                 updateNumeration(index, {
                                   startNumber:
                                     parsed.startNumber ?? row.startNumber,

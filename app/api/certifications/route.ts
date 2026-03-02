@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 
 import {
   type Certification,
+  extractRutFromFolioXml,
   fileToBase64,
+  normalizeRut,
   parseNumerations,
   readFile,
   readString,
@@ -74,6 +76,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
+    const rutEmisor = readString(formData, "rutEmisor");
+    const normalizedRutEmisor = normalizeRut(rutEmisor);
     const setSiiFile = readFile(formData, "setSiiFile");
     const certificadoFile = readFile(formData, "certificadoFile");
 
@@ -95,6 +99,13 @@ export async function POST(request: Request) {
           throw new Error("Todas las numeraciones requieren archivo");
         }
 
+        const folioRut = await extractRutFromFolioXml(numerationFile);
+        if (!normalizedRutEmisor || !folioRut || folioRut !== normalizedRutEmisor) {
+          return Promise.reject(
+            new Error("El RUT del folio no coincide con el RUT del emisor")
+          );
+        }
+
         return {
           numerationBase64: await fileToBase64(numerationFile),
           startNumber: item.startNumber,
@@ -107,7 +118,7 @@ export async function POST(request: Request) {
     const certification: Certification = {
       setSiiBase64: await fileToBase64(setSiiFile),
       numerations,
-      rutEmisor: readString(formData, "rutEmisor"),
+      rutEmisor,
       razonSocialEmisor: readString(formData, "razonSocialEmisor"),
       giroEmisor: readString(formData, "giroEmisor"),
       actecoEmisor: readString(formData, "actecoEmisor"),
@@ -139,6 +150,22 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Create certification error", error);
+    if (error instanceof Error) {
+      if (error.message === "El RUT del folio no coincide con el RUT del emisor") {
+        return NextResponse.json(
+          { ok: false, message: error.message },
+          { status: 400 }
+        );
+      }
+
+      if (error.message === "Todas las numeraciones requieren archivo") {
+        return NextResponse.json(
+          { ok: false, message: error.message },
+          { status: 400 }
+        );
+      }
+    }
+
     return NextResponse.json(
       { ok: false, message: "Error al crear certificación" },
       { status: 500 }
