@@ -7,6 +7,14 @@ export type Numeration = {
   documentType: string;
 };
 
+export type CertificationProcessingStatus = "pending" | "processing" | "finish";
+
+export type CertificationEvent = {
+  type: string;
+  message: string;
+  createdAt: string;
+};
+
 export type Certification = {
   _id?: ObjectId;
   setSiiBase64: string;
@@ -30,6 +38,8 @@ export type Certification = {
   resolutionDate: string;
   resolutionTicketNumber: string;
   resolutionTicketDate: string;
+  processingStatus: CertificationProcessingStatus;
+  events: CertificationEvent[];
   createdAt: string;
 };
 

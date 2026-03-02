@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
 import {
   Card,
   CardContent,
@@ -62,6 +63,9 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted p-6">
+      <div className="absolute right-4 top-4">
+        <ModeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Ingreso Backoffice</CardTitle>

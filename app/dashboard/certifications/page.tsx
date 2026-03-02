@@ -8,6 +8,7 @@ import {
   ChevronsUpDown,
   Eye,
   EyeOff,
+  Loader2,
   Pencil,
   Plus,
   Trash2,
@@ -16,6 +17,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
 import {
   Card,
   CardContent,
@@ -69,6 +71,7 @@ type CertificationListItem = {
   createdAt: string;
   numerationsCount: number;
   documentTypes: string;
+  processingStatus: "pending" | "processing" | "finish";
 };
 
 type CertificationDetail = {
@@ -99,6 +102,12 @@ type CertificationDetail = {
   resolutionDate: string;
   resolutionTicketNumber: string;
   resolutionTicketDate: string;
+  processingStatus: "pending" | "processing" | "finish";
+  events: Array<{
+    type: string;
+    message: string;
+    createdAt: string;
+  }>;
   createdAt: string;
 };
 
@@ -269,6 +278,17 @@ export default function CertificationsPage() {
   const [actecoOpen, setActecoOpen] = useState(false);
   const [isValidatingCertPassword, setIsValidatingCertPassword] = useState(false);
   const [showCertPassword, setShowCertPassword] = useState(false);
+  const [isEnqueueingCertification, setIsEnqueueingCertification] = useState(false);
+  const [editingProcessingStatus, setEditingProcessingStatus] = useState<
+    "pending" | "processing" | "finish"
+  >("pending");
+  const [editingEvents, setEditingEvents] = useState<
+    CertificationDetail["events"]
+  >([]);
+  const [enqueueStatus, setEnqueueStatus] = useState<{
+    status: "success" | "error";
+    message: string;
+  } | null>(null);
   const [certPasswordValidation, setCertPasswordValidation] = useState<{
     status: "success" | "error";
     message: string;
@@ -357,6 +377,9 @@ export default function CertificationsPage() {
     setNumerations([]);
     setMessage("");
     setCertPasswordValidation(null);
+    setEditingProcessingStatus("pending");
+    setEditingEvents([]);
+    setEnqueueStatus(null);
     setShowCertPassword(false);
   }
 
@@ -447,8 +470,11 @@ export default function CertificationsPage() {
           existingBase64: item.numerationBase64,
         }))
       );
+      setEditingProcessingStatus(data.processingStatus ?? "pending");
+      setEditingEvents(data.events ?? []);
       setDialogOpen(true);
       setMessage("");
+      setEnqueueStatus(null);
       setShowCertPassword(false);
     } finally {
       setSaving(false);
@@ -459,6 +485,12 @@ export default function CertificationsPage() {
     event.preventDefault();
     setSaving(true);
     setMessage("");
+
+    if (isEditing && editingProcessingStatus === "processing") {
+      setSaving(false);
+      setMessage("No se puede actualizar una certificación en proceso");
+      return;
+    }
 
     if (!form.actecoEmisor.trim()) {
       setSaving(false);
@@ -610,6 +642,77 @@ export default function CertificationsPage() {
     }
   }
 
+  async function onEnqueueCertification() {
+    if (!editingId) {
+      return;
+    }
+
+    setEnqueueStatus(null);
+    setIsEnqueueingCertification(true);
+
+    try {
+      const response = await fetch(`/api/certifications/${editingId}/enqueue`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        ok: boolean;
+        message?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        setEnqueueStatus({
+          status: "error",
+          message: payload.message ?? "No fue posible encolar la certificación",
+        });
+        return;
+      }
+
+      setEnqueueStatus({
+        status: "success",
+        message: payload.message ?? "Certificación encolada correctamente",
+      });
+      setEditingProcessingStatus("processing");
+      setEditingEvents((prev) => [
+        ...prev,
+        {
+          type: "enqueued",
+          message: "Certificación encolada para envío al SII",
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      await loadCertifications();
+    } finally {
+      setIsEnqueueingCertification(false);
+    }
+  }
+
+  function renderStatusBadge(status: CertificationListItem["processingStatus"]) {
+    const loadingStatus = status === "processing";
+    const label =
+      status === "pending"
+        ? "pendiente"
+        : status === "processing"
+          ? "en proceso"
+          : "finalizado";
+
+    return (
+      <Badge variant="outline" className="inline-flex items-center gap-1.5">
+        {loadingStatus ? <Loader2 className="size-3.5 animate-spin" /> : null}
+        {label}
+      </Badge>
+    );
+  }
+
+  function renderEventTypeLabel(type: string) {
+    if (type === "enqueued") {
+      return "encolado";
+    }
+    if (type === "enqueue_failed") {
+      return "error encolando";
+    }
+    return type;
+  }
+
   const emptyState = useMemo(
     () => !loading && items.length === 0,
     [items.length, loading]
@@ -645,17 +748,20 @@ export default function CertificationsPage() {
               }
             }}
           >
-            <DialogTrigger asChild>
-              <Button
-                onClick={() => {
-                  resetForm();
-                  setDialogOpen(true);
-                }}
-              >
-                <Plus className="mr-2 size-4" />
-                Nueva certificación
-              </Button>
-            </DialogTrigger>
+            <div className="flex items-center gap-2">
+              <ModeToggle />
+              <DialogTrigger asChild>
+                <Button
+                  onClick={() => {
+                    resetForm();
+                    setDialogOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 size-4" />
+                  Nueva certificación
+                </Button>
+              </DialogTrigger>
+            </div>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-6xl">
               <DialogHeader>
                 <DialogTitle>
@@ -1111,11 +1217,77 @@ export default function CertificationsPage() {
                   </CardContent>
                 </Card>
 
+                {isEditing ? (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">Eventos</CardTitle>
+                      <CardDescription>
+                        Historial de procesamiento de la certificación.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-3">{renderStatusBadge(editingProcessingStatus)}</div>
+                      {editingEvents.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Aún no hay eventos para esta certificación.
+                        </p>
+                      ) : (
+                        <div className="max-h-52 space-y-3 overflow-y-auto pr-2">
+                          {editingEvents.map((event, index) => (
+                            <div
+                              key={`${event.createdAt}-${event.type}-${index}`}
+                              className="relative pl-5"
+                            >
+                              <span className="absolute left-0 top-1.5 size-2 rounded-full bg-primary" />
+                              <p className="text-sm font-medium">{event.message}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {renderEventTypeLabel(event.type)} ·{" "}
+                                {event.createdAt
+                                  ? new Date(event.createdAt).toLocaleString("es-CL")
+                                  : "-"}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
                 {message ? (
                   <p className="text-sm text-destructive">{message}</p>
                 ) : null}
+                {enqueueStatus ? (
+                  <p
+                    className={cn(
+                      "text-sm",
+                      enqueueStatus.status === "success"
+                        ? "text-green-600"
+                        : "text-destructive"
+                    )}
+                  >
+                    {enqueueStatus.message}
+                  </p>
+                ) : null}
 
                 <div className="flex items-center justify-end gap-2">
+                  {isEditing ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-emerald-600 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                      onClick={() => void onEnqueueCertification()}
+                      disabled={
+                        isEnqueueingCertification ||
+                        saving ||
+                        editingProcessingStatus !== "pending"
+                      }
+                    >
+                      {isEnqueueingCertification
+                        ? "Encolando..."
+                        : "Enviar al SII certificación"}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="outline"
@@ -1128,7 +1300,11 @@ export default function CertificationsPage() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={saving || (requiresCertValidation && !hasValidCertPassword)}
+                    disabled={
+                      saving ||
+                      editingProcessingStatus === "processing" ||
+                      (requiresCertValidation && !hasValidCertPassword)
+                    }
                   >
                     <Upload className="mr-2 size-4" />
                     {saving ? "Guardando..." : isEditing ? "Actualizar" : "Crear"}
@@ -1153,6 +1329,7 @@ export default function CertificationsPage() {
                   <TableHead>Emisor</TableHead>
                   <TableHead>Receptor</TableHead>
                   <TableHead>Resolución</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Tipo documento</TableHead>
                   <TableHead>Numeraciones</TableHead>
                   <TableHead>Creado</TableHead>
@@ -1162,13 +1339,13 @@ export default function CertificationsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center">
+                    <TableCell colSpan={8} className="py-8 text-center">
                       Cargando...
                     </TableCell>
                   </TableRow>
                 ) : emptyState ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center">
+                    <TableCell colSpan={8} className="py-8 text-center">
                       Sin certificaciones.
                     </TableCell>
                   </TableRow>
@@ -1188,6 +1365,7 @@ export default function CertificationsPage() {
                         </p>
                       </TableCell>
                       <TableCell>{item.resolutionNumber}</TableCell>
+                      <TableCell>{renderStatusBadge(item.processingStatus)}</TableCell>
                       <TableCell>{item.documentTypes || "-"}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">{item.numerationsCount}</Badge>

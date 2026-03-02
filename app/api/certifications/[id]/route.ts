@@ -49,6 +49,8 @@ export async function GET(_: Request, { params }: RouteParams) {
       data: {
         ...row,
         _id: row._id?.toString(),
+        processingStatus: row.processingStatus ?? "pending",
+        events: row.events ?? [],
       },
     });
   } catch (error) {
@@ -76,6 +78,16 @@ export async function PUT(request: Request, { params }: RouteParams) {
       return NextResponse.json(
         { ok: false, message: "Certificación no encontrada" },
         { status: 404 }
+      );
+    }
+
+    if (current.processingStatus === "processing") {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "No se puede actualizar una certificación en proceso",
+        },
+        { status: 409 }
       );
     }
 
@@ -143,6 +155,8 @@ export async function PUT(request: Request, { params }: RouteParams) {
       resolutionDate: readString(formData, "resolutionDate"),
       resolutionTicketNumber: readString(formData, "resolutionTicketNumber"),
       resolutionTicketDate: readString(formData, "resolutionTicketDate"),
+      processingStatus: current.processingStatus ?? "pending",
+      events: current.events ?? [],
       createdAt: current.createdAt,
     };
 

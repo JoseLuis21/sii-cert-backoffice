@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 
 import { Badge } from "@/components/ui/badge";
+import { ModeToggle } from "@/components/mode-toggle";
 import {
   Card,
   CardContent,
@@ -54,6 +55,9 @@ export default async function DashboardPage() {
             <p className="text-sm text-muted-foreground">
               Resumen de certificación y usuarios.
             </p>
+          </div>
+          <div className="ml-auto">
+            <ModeToggle />
           </div>
         </header>
 

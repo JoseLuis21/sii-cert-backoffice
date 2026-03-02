@@ -21,6 +21,7 @@ type CertificationListItem = {
   createdAt: string;
   numerationsCount: number;
   documentTypes: string;
+  processingStatus: Certification["processingStatus"];
 };
 
 export async function GET() {
@@ -39,6 +40,7 @@ export async function GET() {
             resolutionNumber: 1,
             createdAt: 1,
             numerations: 1,
+            processingStatus: 1,
           },
         }
       )
@@ -61,6 +63,7 @@ export async function GET() {
             .filter((value): value is string => Boolean(value))
         )
       ).join(", "),
+      processingStatus: row.processingStatus ?? "pending",
     }));
 
     return NextResponse.json({ ok: true, data });
@@ -137,6 +140,8 @@ export async function POST(request: Request) {
       resolutionDate: readString(formData, "resolutionDate"),
       resolutionTicketNumber: readString(formData, "resolutionTicketNumber"),
       resolutionTicketDate: readString(formData, "resolutionTicketDate"),
+      processingStatus: "pending",
+      events: [],
       createdAt: new Date().toISOString(),
     };
 
