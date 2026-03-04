@@ -18,6 +18,7 @@ export type CertificationEvent = {
 export type Certification = {
   _id?: ObjectId;
   setSiiBase64: string;
+  exhangeDteBase64?: string;
   numerations: Numeration[];
   rutEmisor: string;
   razonSocialEmisor: string;
@@ -39,6 +40,24 @@ export type Certification = {
   resolutionTicketNumber: string;
   resolutionTicketDate: string;
   processingStatus: CertificationProcessingStatus;
+  trackId?: string;
+  uploadStatus?: string;
+  salesBookTrackId?: string;
+  salesBookUploadStatus?: string;
+  purchaseBookTrackId?: string;
+  purchaseBookUploadStatus?: string;
+  stage2TrackId?: string;
+  stage2UploadStatus?: string;
+  envioXmlUrl?: string;
+  salesBookXmlUrl?: string;
+  purchaseBookXmlUrl?: string;
+  stage2EnvioXmlUrl?: string;
+  stage2Dte33XmlUrl?: string;
+  stage2Dte56XmlUrl?: string;
+  stage2Dte61XmlUrl?: string;
+  stage3RecepcionDteXmlUrl?: string;
+  stage3EnvioRecibosXmlUrl?: string;
+  stage3ResultadoDteXmlUrl?: string;
   events: CertificationEvent[];
   createdAt: string;
 };

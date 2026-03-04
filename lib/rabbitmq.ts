@@ -41,8 +41,11 @@ export async function getRabbitChannel(): Promise<Channel> {
   return channelPromise;
 }
 
-export async function enqueueCertification(certificationId: string) {
-  const queueName = getRabbitQueueName();
+export async function enqueueCertification(
+  certificationId: string,
+  queueNameOverride?: string
+) {
+  const queueName = queueNameOverride ?? getRabbitQueueName();
   const channel = await getRabbitChannel();
   await channel.assertQueue(queueName, { durable: true });
 

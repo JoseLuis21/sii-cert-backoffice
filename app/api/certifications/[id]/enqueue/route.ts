@@ -14,7 +14,9 @@ type RouteParams = {
   }>;
 };
 
-export async function POST(_: Request, { params }: RouteParams) {
+const STAGE3_QUEUE = "certificaciones_stage3";
+
+export async function POST(request: Request, { params }: RouteParams) {
   const { id } = await params;
 
   if (!ObjectId.isValid(id)) {
@@ -25,6 +27,16 @@ export async function POST(_: Request, { params }: RouteParams) {
   }
 
   try {
+    let stage: number | undefined;
+    try {
+      const body = (await request.json()) as { stage?: number };
+      stage = body.stage;
+    } catch {
+      stage = undefined;
+    }
+
+    const isStage3Enqueue = stage === 3;
+
     const db = await getDb();
     const certification = await db
       .collection<Certification>("certifications")
@@ -34,6 +46,9 @@ export async function POST(_: Request, { params }: RouteParams) {
           projection: {
             _id: 1,
             processingStatus: 1,
+            stage3RecepcionDteXmlUrl: 1,
+            stage3EnvioRecibosXmlUrl: 1,
+            stage3ResultadoDteXmlUrl: 1,
           },
         }
       );
@@ -46,7 +61,7 @@ export async function POST(_: Request, { params }: RouteParams) {
     }
 
     const currentStatus = certification.processingStatus ?? "pending";
-    if (currentStatus !== "pending") {
+    if (!isStage3Enqueue && currentStatus !== "pending") {
       return NextResponse.json(
         {
           ok: false,
@@ -54,6 +69,72 @@ export async function POST(_: Request, { params }: RouteParams) {
         },
         { status: 400 }
       );
+    }
+
+    if (isStage3Enqueue) {
+      if (currentStatus !== "finish") {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "Solo se puede encolar etapa 3 cuando la certificación está en finish",
+          },
+          { status: 400 }
+        );
+      }
+
+      const hasStage3Xml =
+        Boolean((certification as Certification).stage3RecepcionDteXmlUrl) &&
+        Boolean((certification as Certification).stage3EnvioRecibosXmlUrl) &&
+        Boolean((certification as Certification).stage3ResultadoDteXmlUrl);
+
+      if (hasStage3Xml) {
+        return NextResponse.json(
+          {
+            ok: false,
+            message: "La certificación ya tiene XML de etapa 3",
+          },
+          { status: 400 }
+        );
+      }
+
+      try {
+        await enqueueCertification(id, STAGE3_QUEUE);
+      } catch {
+        await db.collection<Certification>("certifications").updateOne(
+          { _id: new ObjectId(id) },
+          {
+            $push: {
+              events: {
+                type: "stage3_enqueue_failed",
+                message: "Error al publicar etapa 3 en RabbitMQ",
+                createdAt: new Date().toISOString(),
+              },
+            },
+          }
+        );
+        throw new Error("stage3_enqueue_failed");
+      }
+
+      await db.collection<Certification>("certifications").updateOne(
+        { _id: new ObjectId(id), processingStatus: "finish" },
+        {
+          $set: {
+            processingStatus: "pending",
+          },
+          $push: {
+            events: {
+              type: "stage3_enqueued",
+              message: "Certificación encolada para generación de etapa 3",
+              createdAt: new Date().toISOString(),
+            },
+          },
+        }
+      );
+
+      return NextResponse.json({
+        ok: true,
+        message: "Etapa 3 encolada. Estado actualizado a pending.",
+      });
     }
 
     const enqueueEvent: CertificationEvent = {

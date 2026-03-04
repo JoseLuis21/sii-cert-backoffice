@@ -98,6 +98,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
     const rutEmisor = readString(formData, "rutEmisor");
     const normalizedRutEmisor = normalizeRut(rutEmisor);
     const setSiiFile = readFile(formData, "setSiiFile");
+    const exchangeDteFile = readFile(formData, "exchangeDteFile");
     const certificadoFile = readFile(formData, "certificadoFile");
 
     const numerationsMeta = parseNumerations(readString(formData, "numerations"));
@@ -136,6 +137,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
       setSiiBase64: setSiiFile
         ? await fileToBase64(setSiiFile)
         : current.setSiiBase64,
+      exhangeDteBase64: exchangeDteFile
+        ? await fileToBase64(exchangeDteFile)
+        : current.exhangeDteBase64,
       numerations,
       rutEmisor,
       razonSocialEmisor: readString(formData, "razonSocialEmisor"),

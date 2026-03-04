@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     const rutEmisor = readString(formData, "rutEmisor");
     const normalizedRutEmisor = normalizeRut(rutEmisor);
     const setSiiFile = readFile(formData, "setSiiFile");
+    const exchangeDteFile = readFile(formData, "exchangeDteFile");
     const certificadoFile = readFile(formData, "certificadoFile");
 
     if (!setSiiFile || !certificadoFile) {
@@ -120,6 +121,9 @@ export async function POST(request: Request) {
 
     const certification: Certification = {
       setSiiBase64: await fileToBase64(setSiiFile),
+      exhangeDteBase64: exchangeDteFile
+        ? await fileToBase64(exchangeDteFile)
+        : "",
       numerations,
       rutEmisor,
       razonSocialEmisor: readString(formData, "razonSocialEmisor"),
